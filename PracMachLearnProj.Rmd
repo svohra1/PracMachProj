@@ -1,0 +1,81 @@
+## Practical Machine Learning - Course Project
+
+This R Markdown document includes the script that will process data for the Course Project for the Coursera course 'Practical Machine Learning'. The data included two files: a training set, and a test set. Both files were downloaded from the URL's listed below. The files were downloaded to the R working directory, before being processed.
+
+
+```{r downloadData, echo = TRUE}
+fileURL_training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+fileURL_testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileURL_training, destfile = "pml-training.csv", method = "curl")
+download.file(fileURL_testing, destfile = "pml-testing.csv", method = "curl")
+```
+
+The training data and the test data were read and stored into separate variables.
+
+```{r readData, echo = TRUE}
+trainingData <- read.csv("pml-training.csv")
+testingData <- read.csv("pml-testing.csv")
+```
+
+The 'trainingData' dataframe contains the data which will be used to create our prediction model. It contains 160 variables. The 'testingData' dataframe contains the dataset that will be used, along with our prediction model, to create our predictions. A quick visual inspection of this data shows that it also contains 160 variables.
+
+```{r dataDimensions, echo = TRUE}
+dim(trainingData)
+dim(testingData)
+```
+
+The following code verifies that the predictors in the 'trainingData' set and the 'testingData' set are the same.
+
+```{r checkPredictors, echo = TRUE}
+names(trainingData) == names(testingData)
+```
+
+A quick look at the result shows us that only one column name is different, between the two datasets. The 'trainingData' contains our dependent variable 'classe' in column 160; while the 'testingData' set contains 'problem_id' in column 160. This number refers to the problem number of our assignment, and is not a predictor.  
+
+A quick look at the 'testingData' also shows us that many columns contain only NA values, in other words, no data. The obvious conclusion is that many predictors are not going to be useful in helping to make a prediction, because the data is not available in the 'testingData' set. To clean the data, the following code finds all columns in the 'testingData' set that DO NOT have all NA values. In other words, if a predictor in the 'testingData' set has all NA's, it cannot be used to predict and should be eliminated from our model.  
+
+Further inspection of the datasets leads to the conclusion that the first seven variables of each dataset would not be useful predictors in determining our dependent variable 'classe'. The code below lists those varaibles. These variables should also be excluded from our model. The final list of relevant predictors is assigned to the logical vector 'cleanPredictors'.  
+
+```{r cleaningPredictors, echo = TRUE}
+predictorsWithData <- sapply(1:length(testingData), function(x) all(!is.na(testingData[, x])))
+names(trainingData[1:7])
+cleanPredictors <- c(rep(FALSE, 7), predictorsWithData[8:160])
+```
+
+The 'caret' package was loaded to perform the statistical analysis. The training data set was partitioned into two sets: training and testing. Each set contained 60% and 40% of the trainingData, respectively.  
+
+```{r partitionData, echo = TRUE}
+library(caret)
+inTrain <- createDataPartition(y = trainingData$classe, p = 0.60, list = FALSE)
+training <- trainingData[inTrain, cleanPredictors]
+testing <- trainingData[-inTrain, cleanPredictors]
+```
+
+The prediction model will use the random forest method, due to its accuracy. Cross-validation was performed using 3 folds. Three folds were used, as opposed to the default 10 folds, to save time. One model using ten folds was created, but the OOB error rate only improved by 0.06% and the processing time was much longer.  
+  
+The final model shows that the number of trees were 500 and the OOB error rate was consistently between 0.90% and 0.80%.
+
+```{r createModel, echo = TRUE}
+fit1 <- train(classe ~ ., data = training, method = "rf", trControl = trainControl(method = "cv", number = 3))
+fit1
+fit1$finalModel
+```
+
+The out-of-sample error rate was calculated using the 'testing' dataframe (not the 'training' dataframe). The confusion matrix below shows that the model achieved more than 99% accuracy. The out-of-sample error rate is calculated by taking the accuracy of the prediction model on the 'testing' dataframe, and subtracting it from 1.  
+
+```{r outOfSampleError, echo = TRUE}
+cm <- confusionMatrix(predict(fit1, testing), testing$classe)
+cm
+```
+
+  
+Therefore, the **out-of-sample error rate is (1 - `r cm$overall[[1]]`) or `r (1 - cm$overall[[1]]) * 100`%**.  
+  
+The final predictions for the Course Submission were made using the dataframe 'testingData'. This was the separate file with only 20 observations. The following code computes and outputs these predictions. All predictions were accepted as correct by the automatic grader.
+
+```{r Answers, echo = TRUE}
+finalPredictions <- predict(fit1, testingData)
+finalPredictions
+```
+
+
